@@ -66,3 +66,4 @@ coverage.out
 ### Rust ###
 **/target/
 Cargo.lock
+!.idea/
