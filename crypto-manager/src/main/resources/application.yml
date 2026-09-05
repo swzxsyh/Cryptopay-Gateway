@@ -1,0 +1,46 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  application:
+    name: crypto-gateway-manager
+  mvc:
+    pathmatch:
+      matching-strategy: ant-path-matcher
+
+server:
+  port: 9889
+  servlet:
+    context-path: /crypto-gateway-manager
+
+logging:
+  level:
+    root: info
+    io.swzxsyh: debug
+  file:
+    path: ./logs/manager
+
+manager:
+  security:
+    jwt:
+      issuer: crypto-gateway-manager
+      secret: ${CRYPTO_MANAGER_JWT_SECRET}
+      access-token-ttl-seconds: ${CRYPTO_MANAGER_JWT_TTL_SECONDS:7200}
+      redis-key-prefix: crypto:manager:jwt
+    bootstrap-admin:
+      enabled: true
+      username: ${CRYPTO_MANAGER_ADMIN_USERNAME:admin}
+      # 推荐生产使用 password-hash；password 只用于本地/首次引导，入库时会被 BCrypt 加密。
+      password: ${CRYPTO_MANAGER_ADMIN_PASSWORD:}
+      password-hash: ${CRYPTO_MANAGER_ADMIN_PASSWORD_HASH:}
+      reset-password-on-startup: ${CRYPTO_MANAGER_ADMIN_RESET_PASSWORD:false}
+      roles:
+        - ADMIN
+
+crypto:
+  payment:
+    alert:
+      telegram:
+        enabled: false
+        api-url: https://api.telegram.org/bot/
+        bot-token: ""
+        chat-id: ""

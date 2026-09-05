@@ -1,0 +1,26 @@
+[package]
+name = "crypto-secret-jni"
+version = "0.1.0"
+edition = "2024"
+description = "Native JNI secret decryptor for CryptoPay Gateway"
+
+[lib]
+name = "crypto_secret_jni"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "crypto-secret-tool"
+path = "src/main.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+base64 = "0.22"
+jni = "0.21"
+sha2 = "0.10"
+zeroize = "1.8"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

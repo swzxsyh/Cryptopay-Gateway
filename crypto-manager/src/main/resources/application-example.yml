@@ -1,0 +1,76 @@
+spring:
+  datasource:
+    url:
+    username:
+    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    call-setters-on-nulls: true
+
+crypto:
+  payment:
+    redis:
+      # Redis 连接地址，供地址池、扫描 checkpoint、锁等运行时状态使用。
+      url: redis://127.0.0.1:6379
+      # Redis 库号。
+      database: 12
+      # Redis 运行态根命名空间。manager 默认不消费支付消息，但查看地址池等能力会沿用 payment 命名空间。
+      key-prefix: crypto:payment
+    external-http:
+      # 外部 HTTP 客户端连接池最大空闲连接数；管理端告警、KMS、后续运营外部接口共用这一组连接。
+      max-idle-connections: 32
+      # 空闲连接保活时间，单位秒。
+      keep-alive-seconds: 300
+      # 建连超时，单位毫秒。
+      connect-timeout-millis: 5000
+      # 响应读取超时，单位毫秒。
+      read-timeout-millis: 8000
+      # 请求写入超时，单位毫秒。
+      write-timeout-millis: 8000
+      # 单次请求整体超时，单位毫秒。
+      call-timeout-millis: 10000
+      # 连接失败时是否允许 OkHttp 做轻量重试。
+      retry-on-connection-failure: true
+    gas:
+      # 管理端保留配置结构便于查看和调整；真正的代付执行入口只在 payment 模块。
+      evm-sponsor-enabled: false
+      # EVM relayer 私钥来源：ENV / YAML / KMS / JNI。
+      evm-relayer-private-key-source-type: ENV
+      # YAML 模式下的 EVM relayer 私钥；生产不要明文写这里。
+      evm-relayer-private-key:
+      # ENV 模式读取的变量名。
+      evm-relayer-private-key-env: CRYPTO_PAYMENT_EVM_RELAYER_PRIVATE_KEY
+      # KMS 模式读取的 keyId。
+      evm-relayer-private-key-kms-key-id: evm-relayer-private-key
+      # Gas 代付防刷开关。管理端只维护配置，不执行代付。
+      sponsor-protection-enabled: true
+      # 限频计数窗口，单位秒。
+      sponsor-counter-ttl-seconds: 3600
+      # 同一订单在窗口内最多允许发起几次代付尝试。
+      sponsor-order-max-attempts: 3
+      # 同一用户钱包在窗口内最多允许发起几次代付尝试。
+      sponsor-wallet-max-attempts: 10
+      # 同一 IP 在窗口内最多允许发起几次代付尝试。
+      sponsor-ip-max-attempts: 30
+      # 同一个 cashierToken 在窗口内最多允许发起几次代付尝试。
+      sponsor-cashier-token-max-attempts: 10
+      # 同一订单代付提交的分布式锁持有秒数。
+      sponsor-order-lock-lease-seconds: 60
+    messaging:
+      # 管理端默认不消费。这里保留 provider 只是为了和 payment 配置结构对齐。
+      provider: REDIS_STREAM
+      # 管理端不消费链上入账消息，避免 manager 和 payment 同时认账。
+      consumer-enabled: false
+      # 保持与 payment 相同 stream/topic，便于后续管理端只做监控时读取配置，但不启动消费者。
+      chain-payment-topic: crypto:payment:chain-payment-events
+
+manager:
+  security:
+    jwt:
+      # dev 环境 JWT 密钥。生产环境不要使用这个值，请在本地环境变量中配置。
+      secret: ${CRYPTO_MANAGER_DEV_JWT_SECRET:change-me-dev-jwt-secret}
+    bootstrap-admin:
+      enabled: false

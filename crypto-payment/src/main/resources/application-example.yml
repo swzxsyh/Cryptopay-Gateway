@@ -1,0 +1,165 @@
+spring:
+  datasource:
+    url:
+    username:
+    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    call-setters-on-nulls: true
+
+crypto:
+  payment:
+    redis:
+      # Redis 连接地址，供地址池、扫描 checkpoint、锁等运行时状态使用。
+      url: redis://127.0.0.1:6379
+      # Redis 库号。
+      database: 0
+      # Redis 运行态根命名空间。地址池、扫描 checkpoint、幂等、回调锁等都会挂在 crypto:payment:* 下。
+      key-prefix: crypto:payment
+    external-http:
+      # 外部 HTTP 客户端连接池最大空闲连接数；回调、Telegram、KMS、第三方钱包 API 共用这一组连接。
+      max-idle-connections: 64
+      # 空闲连接保活时间，单位秒。
+      keep-alive-seconds: 300
+      # 建连超时，单位毫秒。
+      connect-timeout-millis: 5000
+      # 响应读取超时，单位毫秒。
+      read-timeout-millis: 8000
+      # 请求写入超时，单位毫秒。
+      write-timeout-millis: 8000
+      # 单次请求整体超时，单位毫秒。
+      call-timeout-millis: 10000
+      # 连接失败时是否允许 OkHttp 做轻量重试。
+      retry-on-connection-failure: true
+    gas:
+      # EVM 平台代付总开关。false 时即使 Token 支持 EIP-3009，也不会由平台 relayer 付 gas。
+      evm-sponsor-enabled: false
+      # EVM relayer 私钥来源：ENV / YAML / KMS。生产建议 ENV 或 KMS，不建议 YAML 明文。
+      evm-relayer-private-key-source-type: ENV
+      # YAML 模式下的 EVM relayer 私钥；生产不要明文写这里。
+      evm-relayer-private-key:
+      # ENV 模式读取的变量名。该钱包需要在对应 EVM 链上有原生币作为 gas。
+      evm-relayer-private-key-env: CRYPTO_PAYMENT_EVM_RELAYER_PRIVATE_KEY
+      # KMS 模式读取的 keyId。
+      evm-relayer-private-key-kms-key-id: evm-relayer-private-key
+      # Gas 代付防刷开关。true 时会按订单、用户钱包、IP、cashierToken 做客户维度限频。
+      sponsor-protection-enabled: true
+      # 限频计数窗口，单位秒。默认 3600 表示一小时窗口。
+      sponsor-counter-ttl-seconds: 3600
+      # 同一订单在窗口内最多允许发起几次代付尝试，避免用户反复提交失败交易。
+      sponsor-order-max-attempts: 3
+      # 同一用户钱包在窗口内最多允许发起几次代付尝试。
+      sponsor-wallet-max-attempts: 10
+      # 同一 IP 在窗口内最多允许发起几次代付尝试。
+      sponsor-ip-max-attempts: 30
+      # 同一个 cashierToken 在窗口内最多允许发起几次代付尝试。
+      sponsor-cashier-token-max-attempts: 10
+      # 同一订单代付提交的分布式锁持有秒数，避免多节点重复提交。
+      sponsor-order-lock-lease-seconds: 60
+    solana:
+      # Solana 平台 Fee Payer 开关。false 时仍由用户钱包自己支付 SOL 手续费；true 时后端会在 intent 中返回平台 fee payer 能力。
+      fee-payer-enabled: false
+      # 平台 fee payer 公钥地址；为空时可尝试从 fee-payer-private-key 推导。
+      fee-payer-address:
+      # fee payer 私钥来源：ENV / YAML / KMS。生产建议 ENV 或 KMS。
+      fee-payer-private-key-source-type: ENV
+      # YAML 模式下的 fee payer 私钥，支持 solanaj base58 private key 或 JSON secret key 数组；生产不要明文写这里。
+      fee-payer-private-key:
+      # ENV 模式读取的变量名。
+      fee-payer-private-key-env: CRYPTO_PAYMENT_SOLANA_FEE_PAYER_PRIVATE_KEY
+      # KMS 模式读取的 keyId。
+      fee-payer-private-key-kms-key-id: solana-fee-payer-private-key
+      # 无法用 getFeeForMessage 精确估算时，按每个签名的默认 lamports 估算。
+      default-fee-lamports-per-signature: 5000
+      # Helius webhook 开关。启用后可接收 Helius Enhanced Transactions Webhook，并转成内部链上入账消息。
+      helius-webhook-enabled: false
+      # Helius webhook 共享密钥；为空则不校验密钥，不建议生产这样配置。
+      helius-webhook-secret:
+      # Helius webhook 密钥 header 名称。
+      helius-webhook-secret-header: X-Helius-Webhook-Secret
+    messaging:
+      # 链上入账消息通道实现：REDIS_STREAM 为持久化队列；REDIS 为 Pub/Sub 广播；后续可扩展 KAFKA / ROCKETMQ / RABBITMQ。
+      provider: REDIS_STREAM
+      # 只建议 payment 模块开启消费；manager 模块不要消费链上入账消息。
+      consumer-enabled: true
+      # eth_getLogs、原生币扫描、Solana SPL/SOL 解析后的统一入账事件 stream/topic 名称。
+      chain-payment-topic: crypto:payment:chain-payment-events
+      # 订阅合约事件 stream/topic 名称；Go/Java watcher 解析订阅激活、续扣、暂停、恢复、取消后写入这里。
+      subscription-event-topic: crypto:payment:subscription-events
+      # Redis Stream consumer group，多个 payment 节点用同一个 group 竞争消费。
+      stream-consumer-group: crypto-payment
+      # Redis Stream consumer 名称；为空时自动按进程生成，生产多节点建议保持为空或配置唯一实例名。
+      stream-consumer-name:
+      # Redis Stream 单次读取最大消息数。
+      stream-batch-size: 20
+      # Redis Stream 阻塞读取等待时间，毫秒。
+      stream-poll-millis: 1000
+      # 超过该空闲秒数仍未 ACK 的 pending 消息会被当前节点认领重试；小于等于 0 表示关闭认领。
+      stream-pending-claim-idle-seconds: 60
+    scanner:
+      # payment 定时任务线程池大小；多链扫描时避免单条链 RPC 超时阻塞其它链。
+      scheduler-pool-size: 4
+      # 是否启用 EVM WebSocket 区块头监听；数据库 payment_scanner_config / payment_chain_scanner_config 可覆盖。
+      websocket-enabled: true
+      # 多节点时每条链只允许一个 payment 实例持有 WSS 订阅；租约到期后其它实例会自动接管。
+      websocket-leader-lease-seconds: 45
+    secrets:
+      kms:
+        # 是否启用 KMS 密钥读取。true 时会走下面的 HTTP KMS 配置。
+        enabled: true
+        # KMS 服务基础地址。
+        base-url: http://127.0.0.1:9000
+        # 读取密钥的路径模板，支持 {keyId} 占位符。
+        resolve-path: /secrets/{keyId}
+        # KMS 返回 JSON 时，实际密钥所在字段名。
+        response-field: value
+        # KMS 鉴权 token 所在环境变量名。
+        api-key-env: CRYPTO_PAYMENT_KMS_API_KEY
+        # KMS 鉴权 header 名称。
+        api-key-header: Authorization
+      jni:
+        # JNI 本地解密开关。启用后 SecretSourceType=JNI 的密钥会调用本地库处理密文。
+        enabled: false
+        # 本地库绝对路径；Linux 生产通常是 .so，Windows 本地调试通常是 .dll。优先级高于 library-name。
+        library-path:
+        # 本地库名称；不写绝对路径时使用 System.loadLibrary 加载，例如 libcrypto_secret_jni.so 对应 crypto_secret_jni。
+        library-name: crypto_secret_jni
+    derived-address:
+      # 地址池是否复用、冷置多久，已经迁移到数据库：
+      # payment_derived_address_config.reuse_address 控制是否复用；
+      # payment_derived_address_config.reuse_cooldown_minutes 控制复用前冷置分钟数。
+      # 默认 reuse_address=0，地址释放后进入 RETIRED，不影响现有测试流程。
+      hd:
+        # 密钥来源类型：ENV / YAML / KMS / JNI。JNI 模式下 mnemonic 可保存密文，由本地 .so 解密。
+        mnemonic-source-type: ENV
+        # YAML/JNI 模式下的助记词内容；YAML 表示明文，JNI 表示密文，生产不建议 YAML 明文。
+        mnemonic:
+        # ENV 模式下读取助记词的环境变量名。
+        mnemonic-env: CRYPTO_PAYMENT_DERIVED_HD_MNEMONIC
+        # KMS/JNI 模式下读取或解密助记词的 keyId。
+        mnemonic-kms-key-id: derived-hd-mnemonic
+        # EVM 使用 secp256k1 派生；Solana 链会自动切到 ed25519/SLIP-0010，并默认使用 m/44'/501'/0'/0'。
+      keystore:
+        # 密码来源类型：ENV / YAML / KMS / JNI。
+        password-source-type: ENV
+        # ENV 模式下读取 keystore 密码的环境变量名。
+        password-env: CRYPTO_PAYMENT_DERIVED_KEYSTORE_PASSWORD
+        # KMS 模式下读取 keystore 密码的 keyId。
+        password-kms-key-id: derived-keystore-password
+      third-party-api:
+        # 第三方钱包 API key 的来源类型：ENV / YAML / KMS / JNI。
+        api-key-source-type: ENV
+        # ENV 模式下读取第三方 API key 的环境变量名。
+        api-key-env: CRYPTO_PAYMENT_DERIVED_THIRD_PARTY_API_KEY
+        # KMS 模式下读取第三方 API key 的 keyId。
+        api-key-kms-key-id: derived-third-party-api-key
+    subscription:
+      # 订阅执行器私钥来源类型：ENV / YAML / KMS / JNI。生产建议 ENV/KMS/JNI，本地测试可以改 YAML。
+      executor-private-key-source-type: ENV
+      # ENV 模式下读取平台订阅执行器私钥的环境变量名；只用于后台执行 ERC-1337 类周期扣款、暂停、恢复、取消。
+      executor-private-key-env: CRYPTO_PAYMENT_SUBSCRIPTION_EXECUTOR_PRIVATE_KEY
+      # KMS 模式下读取平台订阅执行器私钥的 keyId。
+      executor-private-key-kms-key-id: subscription-executor-private-key

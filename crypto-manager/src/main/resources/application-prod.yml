@@ -1,0 +1,7 @@
+manager:
+  security:
+    jwt:
+      # prod 必须从环境变量注入，且长度至少 32 字节。
+      secret: ${CRYPTO_MANAGER_PROD_JWT_SECRET:}
+    bootstrap-admin:
+      reset-password-on-startup: false

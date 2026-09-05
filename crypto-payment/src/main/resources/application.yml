@@ -1,0 +1,35 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: crypto-gateway-payment
+  mvc:
+    pathmatch:
+      matching-strategy: ant-path-matcher
+
+server:
+  port: 9888
+  servlet:
+    context-path: /crypto-gateway
+
+logging:
+  level:
+    root: info
+    io.swzxsyh: debug
+  file:
+    path: ./logs/payment
+
+crypto:
+  brand:
+    name: CryptoPay Gateway
+  payment:
+    alert:
+      telegram:
+        enabled: false
+        api-url: https://api.telegram.org/bot/
+        bot-token: ""
+        chat-id: ""
+
+payment:
+  normalized-config:
+    enabled: true

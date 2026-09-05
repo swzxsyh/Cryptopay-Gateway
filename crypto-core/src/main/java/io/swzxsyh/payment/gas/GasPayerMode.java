@@ -1,0 +1,9 @@
+package io.swzxsyh.payment.gas;
+
+public enum GasPayerMode {
+  PLATFORM_SPONSORED,
+  CUSTOMER_PAYS,
+  CUSTOMER_TOP_UP_REQUIRED,
+  ALTERNATE_ROUTE_REQUIRED,
+  FREE_TRANSFER
+}
