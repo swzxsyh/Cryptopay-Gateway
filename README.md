@@ -162,8 +162,24 @@ than filing a public issue.
 - The Go watcher is optimized as a lightweight scanner runtime, but RPC provider
   limits and Redis Stream retention must be sized and monitored for the target
   transaction volume.
-- A single transaction containing multiple token transfers needs event-level
-  idempotency consideration before enabling batch-payout use cases.
+
+## Implementation Status and Roadmap
+
+The supported production target is **one EVM USDC/USDT transfer per payment
+order**, using a derived receiving address. A payment transaction must not
+contain transfers for multiple orders. Exchange batch withdrawals and
+multi-transfer contract calls are not currently supported payment flows.
+
+Before production launch, complete the following items:
+
+| Priority | Item | Current behavior |
+| --- | --- | --- |
+| P0 | Make payment-event processing atomic | A transaction replay claim is persisted before the order result. A transient failure after that claim can cause the retry to be treated as a duplicate. Persist replay state and the order result atomically, or use an explicit `PROCESSING` / `SUCCEEDED` replay state. |
+| P0 | Fail closed when watcher configuration is invalid | In DB configuration mode, a load failure can currently fall back to environment configuration. Production startup must fail when Redis, MySQL configuration, active chains, token rules, or required RPC endpoints are unavailable. Add readiness checks based on dependency connectivity and checkpoint progress. |
+| P1 | Handle unsupported multi-transfer transactions explicitly | The system intentionally permits only one order per transaction. Detect additional matching transfer logs for the same transaction and persist an operational exception instead of silently ignoring them. |
+| P1 | Add payment-path integration tests | Cover USDC/USDT payment confirmation, duplicate events, order expiry followed by payment, callback retries, database/Redis recovery, and watcher checkpoint recovery. |
+| P1 | Align public chain support with payment channels | Go watchers can observe TRON, SUI, and TON events, but the current payment route creation supports derived addresses only for EVM/Solana and contract payments only for EVM. Either implement payment channels for those chains or mark them as experimental. |
+| P1 | Implement contract settlement artifacts | The repository contains contract-call preparation but does not contain Solidity sources, ABIs, deployment scripts, audited deployments, or operational procedures for the settlement contract. |
 
 ## License
 

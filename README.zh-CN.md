@@ -145,7 +145,23 @@ export WATCHER_MYSQL_DSN="user:password@tcp(127.0.0.1:3306)/crypto?parseTime=tru
 - 不要提交 `application-dev.yml`、本地环境文件、私钥、证书、keystore 或日志。
 - Go watcher 是轻量化扫描运行时，但仍需根据目标交易量为 RPC 服务商限额和 Redis Stream
   保留策略进行容量规划和监控。
-- 启用批量付款场景前，需要先完成单笔交易内多个 Token Transfer 的事件级幂等设计。
+
+## 实现状态与后续修复清单
+
+当前可支持的生产目标是：**EVM USDC/USDT、派生收款地址、每笔订单对应一次 Token
+Transfer**。一笔链上交易不能同时为多个订单付款；交易所批量提现和多转账合约调用暂不属于
+受支持的支付方式。
+
+生产上线前需要完成以下事项：
+
+| 优先级 | 事项 | 当前行为 |
+| --- | --- | --- |
+| P0 | 保证支付事件处理的原子性 | 交易防重记录会先于订单结果落库。防重完成后若发生瞬时故障，后续重试可能被视为重复交易。应将防重状态和订单结果置于同一事务，或使用 `PROCESSING` / `SUCCEEDED` 等显式防重状态。 |
+| P0 | watcher 配置异常时拒绝启动 | DB 配置模式加载失败时当前可能回退到环境变量。生产环境应在 Redis、MySQL 配置、启用链、Token 规则或必要 RPC Endpoint 不可用时启动失败；并根据依赖连通性和 checkpoint 推进情况提供 readiness 检查。 |
+| P1 | 显式处理不支持的多 Transfer 交易 | 系统有意限制“一笔交易只对应一个订单”。同一交易中发现多个命中收款地址的 Transfer 时，应创建运营异常记录，而不是静默忽略后续日志。 |
+| P1 | 增加支付路径集成测试 | 覆盖 USDC/USDT 确认入账、重复事件、订单过期后到账、回调重试、MySQL/Redis 故障恢复和 watcher checkpoint 恢复。 |
+| P1 | 让公开的链支持范围与 payment 通道一致 | Go watcher 可以观察 TRON、SUI、TON 事件，但当前 payment 派生地址仅支持 EVM/Solana，合约支付仅支持 EVM。应补齐这些链的支付通道，或将其标记为实验性能力。 |
+| P1 | 实现合约结算产物 | 仓库已有合约调用参数准备逻辑，但尚未包含 Solidity 源码、ABI、部署脚本、已审计部署合约或合约运维流程。 |
 
 ## 开源许可证
 
