@@ -1,108 +1,112 @@
 # CryptoPay Gateway
 
-CryptoPay Gateway 是一个面向加密货币支付与链上监控的多模块后端项目，包含 Java 业务模块、Go 监控服务以及 Rust JNI 安全组件。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 项目概览
+[中文文档](README.zh-CN.md)
 
-该项目聚焦于以下能力：
-- 加密货币支付订单创建与状态跟踪
-- 链上交易监控与事件消费
-- 钱包/地址管理与链路路由
-- 商户与结算相关能力
-- 安全密钥/敏感信息的原生 JNI 处理
+CryptoPay Gateway is a modular cryptocurrency payment backend for accepting and
+settling token payments. It provides merchant order APIs, cashier flows,
+on-chain payment detection, idempotent payment processing, callbacks, and an
+operations API.
 
-## 技术栈
+The primary receiving flow is designed for USDC and USDT token payments. Java
+implements the business and payment state machine; the standalone Go watcher
+can be deployed as the production on-chain scanner.
 
-- Java / Spring Boot 4
-- Maven 多模块构建
-- MySQL / MyBatis Plus
-- Redis / Redisson
-- Web3 / Solana / 链上扫描能力
-- Go watcher runtime
-- Rust JNI native secret library
+> This project is software infrastructure, not a custodial service or financial
+> product. Review the code, configuration, supported chain/token contracts, and
+> applicable regulations before any production deployment.
 
-## 代码结构
+## Features
+
+- Merchant-signed payment order creation and query APIs
+- Cashier-token-protected payment route selection and wallet actions
+- USDC/USDT token routing for EVM, Solana, TRON, SUI, and TON chain families
+- Derived-address and contract settlement payment methods
+- Redis Stream event boundary between chain watchers and payment processing
+- Payment state transitions, idempotency, amount checks, KYT hooks, ledger
+  posting, and signed merchant callbacks
+- Configurable confirmation depth, checkpoints, active destination addresses,
+  distributed locks, and replay protection
+- Go watcher runtime for EVM ERC20, Solana SPL, TRC20, SUI, TON, and
+  subscription events
+- Administrative API with JWT authentication and permission controls
+
+## Architecture
 
 ```text
-CryptoPay-Gateway/
-├── pom.xml                         # Maven parent
-├── .gitignore                     # Git ignore rules
-├── docs/
-│   ├── mysql-init-clean.sql
-│   └── mysql-schema.sql
-├── crypto-core/                   # 核心支付/链上/配置/持久化能力
-├── crypto-payment/                # 支付服务模块
-├── crypto-watcher/                # Java 版本链上监听/扫描模块
-├── crypto-manager/                # 管理后台/管理端服务
-├── crypto-wallet/                 # 钱包相关模块, 空置
-├── crypto-watcher-go/             # Go 版本链路监控模块
-└──  crypto-secret-jni/            # Rust JNI 安全组件
+Merchant API
+    |
+    v
+crypto-payment  --->  MySQL (orders, ledger, audit records)
+    |                         ^
+    |                         |
+    +--> Cashier API           |
+    |                         |
+    v                         |
+Redis: active destinations, checkpoints, locks, Redis Streams
+    ^
+    |
+crypto-watcher-go (recommended production scanner)
+    |
+    v
+Blockchain RPC / WebSocket providers
 ```
 
-## 模块说明
+The watcher publishes normalized payment facts to
+`crypto:payment:chain-payment-events`. `crypto-payment` is the sole owner of
+order matching, payment status changes, accounting, KYT decisions, and callback
+delivery.
 
-### crypto-core
-核心业务库，提供：
-- 支付订单域模型
-- 链配置、网关配置、签名配置
-- 交易状态解析
-- 持久化映射与通用扩展能力
+## Repository Layout
 
-### crypto-payment
-支付入口模块，负责：
-- 订单创建与支付接口
-- 网关/路由相关逻辑
-- 回调处理
-- 商户对接流程
+| Path | Description |
+| --- | --- |
+| `crypto-core` | Shared payment domain, persistence, configuration, security, and chain integrations |
+| `crypto-payment` | Merchant, cashier, gateway, settlement, callback, and payment event services |
+| `crypto-watcher` | Java chain watcher implementation |
+| `crypto-watcher-go` | Standalone Go chain watcher runtime |
+| `crypto-manager` | Administrative APIs and JWT-based management security |
+| `crypto-secret-jni` | Rust JNI library for native secret handling |
+| `docs` | MySQL schema and local initialization SQL |
 
-### crypto-watcher
-Java 版本的链上监听器，重点用于：
-- 交易确认
-- 事件扫描
-- 链状态同步
+## Requirements
 
-### crypto-manager
-管理端/后台模块，适合放置：
-- 管理平台接口
-- 审批/管理员操作
-- 运营监控相关入口
-
-### crypto-wallet
-- 暂无实现
-
-### crypto-watcher-go
-Go 实现的 watcher 运行时，适合：
-- 高性能异步处理
-- 链上事件分发
-- Redis/Kafka 之类的消息集成（视部署方式而定）
-
-### crypto-secret-jni
-Rust 编写的 JNI 安全组件，负责：
-- AES-GCM 加解密
-- 原生字符串/密钥处理
-- 为 Java 层提供安全解密桥接
-
-## 构建说明
-
-### 1. Java / Maven
-
-要求：
 - JDK 25
-- Maven 3.6.3+（建议使用较新版本）
+- Maven 3.6.3+
+- Go 1.25.3+ for `crypto-watcher-go`
+- Rust toolchain for `crypto-secret-jni`
+- MySQL 8+
+- Redis 7+
+- RPC endpoints for each enabled chain
 
-构建入口：
+## Quick Start
 
-```bash
-mvn clean install
-```
+1. Initialize a development database with `docs/mysql-schema.sql`. Optional
+   seed data is available in `docs/mysql-init-clean.sql`.
+2. Copy and complete the module configuration from the relevant
+   `application-example.yml`. Keep credentials, private keys, and provider
+   tokens outside version control.
+3. Build the Java modules:
 
-按模块构建：
+   ```bash
+   mvn clean install
+   ```
 
-```bash
-mvn -pl crypto-core,crypto-payment,crypto-manager,crypto-wallet,crypto-watcher install
-```
+4. Start the payment service:
 
-### 2. Go
+   ```bash
+   mvn spring-boot:run -pl crypto-payment
+   ```
+
+5. Configure and start **one** watcher implementation. For the Go runtime:
+
+   ```bash
+   cd crypto-watcher-go
+   go run ./cmd/watcher
+   ```
+
+Run the Go watcher checks with:
 
 ```bash
 cd crypto-watcher-go
@@ -110,63 +114,57 @@ go test ./...
 go build ./...
 ```
 
-### 3. Rust JNI
+## Watcher Configuration
+
+The Go watcher reads environment variables. At minimum, configure Redis, the
+enabled chains, and the token contracts:
 
 ```bash
-cd crypto-secret-jni
-cargo test
-cargo build --release
+export WATCHER_REDIS_ADDR="127.0.0.1:6379"
+export WATCHER_REDIS_PREFIX="crypto:payment"
+export WATCHER_CHAIN_PAYMENT_TOPIC="crypto:payment:chain-payment-events"
+export WATCHER_CONFIG_SOURCE="DB"
+export WATCHER_MYSQL_DSN="user:password@tcp(127.0.0.1:3306)/crypto?parseTime=true&loc=Local"
 ```
 
-## 运行方式
+In `DB` mode, watcher configuration is read from `payment_chain_config`,
+`payment_token_config`, `payment_scanner_config`, and
+`payment_chain_scanner_config`. Active receiving addresses are supplied by
+`crypto-payment` through Redis and fall back to active orders in MySQL.
 
-Java 模块通常通过 Spring Boot 启动类启动，示例：
+See [`crypto-watcher-go/README.md`](crypto-watcher-go/README.md) for the full
+environment-variable reference and chain-specific configuration.
 
-```bash
-mvn spring-boot:run -pl crypto-manager
-```
+## Security
 
-或直接运行对应 `mainClass`。
+Production deployments should follow these requirements:
 
-Go watcher 可以从目录启动：
+- Enable merchant request signature verification and protect signing keys.
+- Use TLS for all public APIs, callbacks, Redis, database, and RPC connections.
+- Restrict database, Redis, and management endpoints to private networks.
+- Configure an HTTPS callback-domain allowlist for every merchant. Do not allow
+  callback URLs that resolve to private, loopback, link-local, or reserved
+  network ranges.
+- Do not enable the Helius webhook without a strong secret and independent
+  on-chain transaction validation.
+- Do not enable Solana Fee Payer signing for token transfers until the transfer
+  source account and authority are verified against the order wallet.
+- Run either the Java watcher or the Go watcher for a chain, never both.
+- Use a unique receiving address per active payment order where possible.
 
-```bash
-cd crypto-watcher-go
-go run ./cmd/watcher
-```
+To report a vulnerability privately, open a GitHub Security Advisory rather
+than filing a public issue.
 
-## 配置建议
+## Development Notes
 
-请注意以下内容不应提交到 GitHub：
-- `.env` / `.env.*`
-- `application-dev.yml`
-- `application-local.yml`
-- 私钥、证书、keystore
-- 日志文件
+- `application-dev.yml`, local environment files, private keys, certificates,
+  keystores, and logs must not be committed.
+- The Go watcher is optimized as a lightweight scanner runtime, but RPC provider
+  limits and Redis Stream retention must be sized and monitored for the target
+  transaction volume.
+- A single transaction containing multiple token transfers needs event-level
+  idempotency consideration before enabling batch-payout use cases.
 
-项目已在根目录 `.gitignore` 中加入相关忽略规则。
+## License
 
-## 数据库
-
-`docs/` 目录中提供了：
-- `mysql-schema.sql`
-- `mysql-init-clean.sql`
-
-可用于初始化本地数据库结构。
-
-## 重要说明
-
-- 当前项目已完成命名统一，根 Maven 父工程使用：`cryptopay-gateway-parent`
-- Java 与 Go 的项目命名已按当前实现统一
-- Rust JNI 中 JNI 导出方法名与 Java 类绑定是强关联关系，不能随意改动，否则会破坏 native 方法调用
-
-## 维护建议
-
-- 统一模块命名与 Maven 坐标
-- 每个模块保持职责边界清晰
-- 私钥、环境变量与本地配置统一放在本地，不提交到仓库
-- IDE 的 `.idea` 和缓存文件不要当作源码的一部分提交
-
-## 许可证
-
-本项目当前未声明正式许可证，具体使用方式请以团队或业务方要求为准。
+CryptoPay Gateway is released under the [MIT License](LICENSE).
